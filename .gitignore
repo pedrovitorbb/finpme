@@ -1,81 +1,33 @@
-# =============================================================
-# FinPME — .gitignore
-# =============================================================
-
-# Variáveis de ambiente reais
+# ── Credenciais ──────────────────────────────────────────────────────────────
 .env
-.env.local
-.env.*.local
-!.env.example
+*.env.local
 
-# Dependências
-node_modules/
-.pnp
-.pnp.js
-.yarn/cache
-.yarn/unplugged
-.yarn/build-state.yml
+# ── Java / Maven ─────────────────────────────────────────────────────────────
+target/
+*.class
+*.jar
+*.war
+.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
 
-# Build outputs
-dist/
-build/
-out/
-.next/
-.nuxt/
-.output/
-
-# Cache e temporários
-.cache/
-.turbo/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# Python (caso usado em scripts)
-__pycache__/
-*.py[cod]
-*.pyo
-.venv/
-venv/
-env/
-
-# Banco de dados local
-*.sqlite
-*.sqlite3
-*.db
-
-# Cobertura de testes
-coverage/
-.nyc_output/
-lcov.info
-
-# IDE e editores
-.vscode/
-!.vscode/extensions.json
-!.vscode/settings.json
+# ── IntelliJ IDEA ────────────────────────────────────────────────────────────
 .idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+*.iml
+*.iws
+*.ipr
+
+# ── VS Code ──────────────────────────────────────────────────────────────────
+.vscode/
+
+# ── Node / React ─────────────────────────────────────────────────────────────
+node_modules/
+dist/
+.vite/
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Sistema operacional ───────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
-
-# Arquivos de chave e certificados
-*.pem
-*.key
-*.cert
-*.p12
-
-# Uploads e armazenamento local
-uploads/
-storage/local/
-
-# Prisma (manter schema, ignorar gerados)
-backend/src/generated/
-
-# Docker volumes locais
-.docker-data/

@@ -1,107 +1,156 @@
-# ADR-001 — Stack Técnico do FinPME
+# ADR-001 — Decisão de stack técnico
 
 **Status:** Aceito  
-**Data:** 2026-06-25  
-**Decisores:** Pedro Vitor  
+**Data:** Junho 2026  
+**Autor:** Pedro Vitor  
 
 ---
 
 ## Contexto
 
-O FinPME é um SaaS de gestão financeira para PMEs brasileiras. Precisamos definir a stack tecnológica para o MVP, priorizando:
+O FinPME é uma plataforma SaaS de gestão financeira e inteligência tributária para micro e pequenas empresas brasileiras. O produto precisa de:
 
-1. Produtividade de desenvolvimento (time pequeno, prazo de 4 meses)
-2. Escalabilidade suficiente para o MVP (até ~500 tenants)
-3. Ecossistema maduro com boa oferta de bibliotecas financeiras/BR
-4. Facilidade de contratação futura de desenvolvedores
+- APIs REST seguras com autenticação JWT
+- Integração com Open Finance (Pluggy) e WhatsApp Business
+- Dashboard financeiro com gráficos em tempo real
+- Jobs noturnos para cálculo de métricas e disparo de alertas
+- Banco de dados relacional com dados financeiros sensíveis
+- Ambiente reproduzível entre desenvolvimento e produção
+
+O desenvolvedor principal tem experiência intermediária com Java/Spring Boot, conhecimento de React e JavaScript, e orientação DevSecOps. O prazo para MVP é de 6 meses.
 
 ---
 
-## Decisão
+## Decisões
 
-### Backend
+### Backend — Spring Boot (Java)
+
+**Escolhido:** Spring Boot 3.x com Java 21  
+**Alternativas consideradas:** Node.js (Express/Fastify), Django (Python)
+
+**Motivo:**  
+O desenvolvedor já domina Java e Spring Boot. O ecossistema cobre todos os requisitos do projeto sem dependências externas: Spring Security para autenticação JWT, Spring Scheduler para jobs noturnos, WebClient para chamadas às APIs externas (Pluggy, BrasilAPI, WhatsApp), e Spring Data JPA para o acesso ao banco. Java 21 traz Virtual Threads, o que melhora a performance em I/O intensivo sem mudar o modelo de programação.
+
+Node.js foi descartado por exigir reaprendizado de stack sem benefício concreto para o perfil do projeto. Django foi descartado pelo mesmo motivo — o ecossistema Java resolve tudo que é necessário.
+
+---
+
+### Banco de dados — PostgreSQL 16
+
+**Escolhido:** PostgreSQL 16  
+**Alternativas consideradas:** MySQL, MongoDB
+
+**Motivo:**  
+Transações financeiras são dados relacionais por natureza — `transactions` referencia `companies`, que referencia `users`. PostgreSQL tem suporte nativo a UUID como PK, JSONB para o campo `payload` do `audit_log`, triggers para `updated_at` automático, e `gen_random_uuid()` sem extensão externa. É o banco com melhor suporte no ecossistema Spring/JPA.
+
+MongoDB foi descartado porque o modelo de dados do FinPME é fortemente relacional — usar um banco de documentos aqui seria forçar um paradigma inadequado ao problema.
+
+---
+
+### Versionamento de schema — Flyway
+
+**Escolhido:** Flyway  
+**Alternativas consideradas:** Liquibase, migrations manuais
+
+**Motivo:**  
+Flyway versiona o schema do banco como código — cada alteração de tabela vira um arquivo SQL numerado em `db/migration/`. Isso garante que o schema em produção sempre corresponde ao código da aplicação, sem surpresas. A integração com Spring Boot é nativa: o Flyway roda automaticamente na inicialização da aplicação.
+
+Liquibase foi descartado por ter mais complexidade de configuração (XML/YAML) sem benefício adicional para o porte do projeto. Migrations manuais foram descartadas por não serem rastreáveis nem reproduzíveis.
+
+---
+
+### Cache e rate limiting — Redis
+
+**Escolhido:** Redis 7  
+**Alternativas consideradas:** Cache em memória (Caffeine), sem cache
+
+**Motivo:**  
+Redis serve dois propósitos distintos no FinPME:
+
+1. **Cache de métricas:** `monthly_snapshots` são calculados uma vez por noite e servidos do Redis. O dashboard abre em menos de 1 segundo sem recalcular EBITDA e YTD a cada requisição.
+2. **Rate limiting:** o `RateLimitFilter` usa Redis para contar requisições por IP no endpoint de autenticação (10 req/min), bloqueando força bruta antes de virar problema.
+
+Caffeine (cache em memória) foi descartado porque não persiste entre reinicializações e não funciona em ambientes com múltiplas instâncias. Sem cache, o dashboard recalcularia métricas de potencialmente milhares de transações em cada requisição — inviável em escala.
+
+---
+
+### Frontend — React 18
+
+**Escolhido:** React 18 com Vite  
+**Alternativas consideradas:** Next.js, Vue.js
+
+**Motivo:**  
+O FinPME é um dashboard fechado atrás de autenticação — SEO não se aplica e todas as telas são dinâmicas. Next.js brilha em páginas públicas com SSR/SSG; para um produto SaaS autenticado, adiciona complexidade de deploy (servidor Node em execução contínua) e conceitos extras (Server Components, App Router) sem benefício concreto.
+
+React puro com Vite entrega build estático servível de qualquer CDN, roteamento com React Router, e o ecossistema necessário: Recharts para gráficos financeiros e Axios com interceptor JWT para chamadas à API. O desenvolvedor já conhece React, o que elimina curva de aprendizado.
+
+Vue.js foi descartado por familiaridade — React é a escolha mais natural dado o background do desenvolvedor.
+
+Se uma landing page de marketing for criada no futuro, Next.js é a escolha correta para esse contexto específico — mas como projeto separado do dashboard.
+
+---
+
+### Containerização — Docker
+
+**Escolhido:** Docker + Docker Compose  
+**Alternativas consideradas:** Instalação local direta
+
+**Motivo:**  
+Docker garante que o ambiente de desenvolvimento é idêntico ao de produção. Com `docker-compose.yml`, PostgreSQL e Redis sobem com um único comando (`docker compose up -d`), sem interferir em instalações locais existentes. O `Dockerfile` da aplicação Spring Boot é a mesma imagem usada em produção — elimina a classe de bugs "funciona na minha máquina".
+
+---
+
+### Open Finance — Pluggy
+
+**Escolhido:** Pluggy  
+**Alternativas consideradas:** TecnoSpeed, integração direta com Banco Central
+
+**Motivo:**  
+Pluggy é uma ITP (Iniciadora de Transação de Pagamento) autorizada pelo Banco Central com SDK e documentação em PT-BR. Conecta 99%+ dos bancos brasileiros (Itaú, Bradesco, Santander, Nubank, Inter, BB, Caixa) por uma única API REST. Processa mais de 530 mil conexões por mês e já é usada por Conta Azul, Nibo e Contabilizei.
+
+A integração direta com o protocolo Open Finance do Banco Central foi descartada — exigiria 3 a 12 meses apenas para a camada de conectividade, além de certificação regulatória. A Pluggy abstrai toda essa complexidade.
+
+---
+
+## Resumo da stack
 
 | Camada | Tecnologia | Versão |
-|--------|-----------|--------|
-| Runtime | Node.js | 22 LTS |
-| Linguagem | TypeScript | 5.x |
-| Framework web | Fastify | 4.x |
-| ORM | Prisma | 5.x |
+|---|---|---|
+| Backend | Spring Boot | 3.x |
+| Linguagem | Java | 21 |
 | Banco de dados | PostgreSQL | 16 |
-| Cache / Filas | Redis (BullMQ) | 7.x |
-| Autenticação | JWT + bcrypt | — |
-| Validação | Zod | 3.x |
-| Testes | Vitest + Supertest | — |
-| Documentação API | Fastify Swagger (OpenAPI 3) | — |
-
-### Frontend
-
-| Camada | Tecnologia | Versão |
-|--------|-----------|--------|
-| Framework | React | 18.x |
-| Linguagem | TypeScript | 5.x |
-| Build tool | Vite | 5.x |
-| Roteamento | TanStack Router | 1.x |
-| Estado server | TanStack Query | 5.x |
-| UI Components | shadcn/ui + Tailwind CSS | — |
-| Formulários | React Hook Form + Zod | — |
-| Tabelas/Gráficos | TanStack Table + Recharts | — |
-| Testes | Vitest + Testing Library | — |
-
-### Infraestrutura (MVP)
-
-| Componente | Tecnologia |
-|-----------|-----------|
-| Containerização | Docker + Docker Compose |
-| CI/CD | GitHub Actions |
-| Hospedagem backend | Railway ou Render |
-| Hospedagem frontend | Vercel |
-| Banco de dados gerenciado | Supabase (PostgreSQL) ou Neon |
-| Cache gerenciado | Upstash (Redis) |
-| Armazenamento de arquivos | Cloudflare R2 |
-| Monitoramento | Sentry (erros) + Grafana Cloud (métricas) |
-
----
-
-## Alternativas Consideradas
-
-### Backend: NestJS vs Fastify
-- **NestJS:** mais opinativo, excelente para times grandes, overhead de abstrações para MVP
-- **Fastify:** mais leve, mais rápido, flexível — adequado ao time reduzido ✅
-
-### ORM: Prisma vs Drizzle vs TypeORM
-- **TypeORM:** maduro mas tipagem fraca, decorators verbosos
-- **Drizzle:** mais leve, totalmente type-safe em SQL, porém ecossistema menor
-- **Prisma:** excelente DX, migrações automáticas, studio integrado — melhor para MVP ✅
-
-### Frontend: Next.js vs React + Vite
-- **Next.js:** SSR útil para landing pages/SEO, mas o app financeiro é autenticado (SSR não agrega muito)
-- **React + Vite:** SPA pura, mais simples de deployar, build mais rápido ✅
-
-### Banco: PostgreSQL vs MySQL vs MongoDB
-- **MongoDB:** flexibilidade de schema, mas dados financeiros são inerentemente relacionais
-- **MySQL:** opção sólida, mas PostgreSQL tem RLS nativo e suporte a JSONB superior ✅
+| Schema versioning | Flyway | 10.x |
+| Cache / rate limit | Redis | 7 |
+| Frontend | React + Vite | 18 |
+| Gráficos | Recharts | latest |
+| HTTP client (frontend) | Axios | latest |
+| Containerização | Docker + Compose | latest |
+| Open Finance | Pluggy API | v2 |
+| Alertas | WhatsApp Business API (Meta) | Cloud API |
+| CNPJ lookup | BrasilAPI | v1 |
 
 ---
 
 ## Consequências
 
 **Positivas:**
-- TypeScript end-to-end: compartilhamento de tipos entre frontend e backend via pacote `@finpme/shared`
-- Prisma facilita migrations e introspection durante o desenvolvimento ágil
-- shadcn/ui + Tailwind permite velocidade de UI sem depender de design system proprietário
-- PostgreSQL RLS resolve isolamento multi-tenant sem lógica extra na aplicação
+- Stack familiar ao desenvolvedor — sem curva de aprendizado desnecessária
+- Ecossistema Spring cobre todos os requisitos sem dependências externas
+- Docker garante paridade entre desenvolvimento e produção
+- Flyway torna o schema rastreável e reproduzível
+- Redis resolve cache e segurança com uma única tecnologia
 
-**Negativas / Riscos:**
-- Fastify tem comunidade menor que Express — mitigado pela documentação robusta
-- Prisma pode ter gargalo de performance em queries muito complexas — usar `$queryRaw` nesses casos
-- Railway/Render têm cold start em plano gratuito — migrar para instância dedicada antes de lançar
+**Negativas / trade-offs:**
+- Java tem startup mais lento que Node.js (mitigado com Virtual Threads do Java 21)
+- Redis adiciona um serviço a mais para operar em produção
+- Pluggy tem custo por conexão em produção (cobrado por item conectado/mês)
+- React puro sem SSR significa que a página inicial exige JavaScript habilitado no browser (aceitável para um produto SaaS autenticado)
 
 ---
 
 ## Revisão
 
-Esta ADR deve ser revisada se:
-- O número de tenants ultrapassar 2.000 (avaliar separação de serviços)
-- Requisitos de real-time intenso surgirem (avaliar WebSockets nativos ou SSE)
-- Time crescer para mais de 5 devs (avaliar NestJS ou monorepo com Turborepo)
+Esta decisão deve ser revisada se:
+- O produto precisar de uma landing page pública com SEO — avaliar Next.js para esse contexto específico
+- O número de empresas ativas ultrapassar 50.000 — avaliar separação do job noturno em serviço dedicado
+- A Pluggy apresentar instabilidade recorrente — avaliar TecnoSpeed como alternativa

@@ -1,183 +1,139 @@
-# ERD — Diagrama Entidade-Relacionamento
+# Diagrama ER — FinPME
 
-**Projeto:** FinPME  
 **Versão:** 1.0  
-**Data:** 2026-06-25
+**Data:** Junho 2026  
+**Autor:** Pedro Vitor  
 
 ---
 
-## Diagrama (Mermaid)
+## Diagrama
 
 ```mermaid
 erDiagram
-    USER {
-        uuid id PK
-        string name
-        string email UK
-        string password_hash
-        string avatar_url
-        boolean is_active
-        timestamp created_at
-        timestamp updated_at
-    }
+  users {
+    uuid id PK
+    string name
+    string email
+    string password_hash
+    string plan
+    timestamptz created_at
+  }
 
-    TENANT {
-        uuid id PK
-        string name
-        string cnpj UK
-        string slug UK
-        string plan
-        boolean is_active
-        timestamp created_at
-        timestamp updated_at
-    }
+  companies {
+    uuid id PK
+    uuid owner_id FK
+    string cnpj
+    string razao_social
+    string tax_regime
+    string cnae
+    string status
+    date data_abertura
+    boolean active
+    timestamptz created_at
+  }
 
-    TENANT_USER {
-        uuid id PK
-        uuid tenant_id FK
-        uuid user_id FK
-        string role
-        boolean is_active
-        timestamp joined_at
-    }
+  bank_accounts {
+    uuid id PK
+    uuid company_id FK
+    string pluggy_item_id
+    string bank_name
+    string account_type
+    decimal balance
+    timestamptz last_synced_at
+    boolean active
+  }
 
-    ACCOUNT {
-        uuid id PK
-        uuid tenant_id FK
-        string name
-        string type
-        string bank_name
-        string bank_agency
-        string bank_account
-        decimal initial_balance
-        string currency
-        boolean is_active
-        timestamp created_at
-        timestamp updated_at
-    }
+  transactions {
+    uuid id PK
+    uuid company_id FK
+    uuid bank_account_id FK
+    string pluggy_tx_id
+    decimal amount
+    string type
+    string category
+    string source
+    date transaction_date
+    string description
+    timestamptz created_at
+  }
 
-    CATEGORY {
-        uuid id PK
-        uuid tenant_id FK
-        uuid parent_id FK
-        string name
-        string type
-        string color
-        boolean is_active
-        timestamp created_at
-    }
+  monthly_snapshots {
+    uuid id PK
+    uuid company_id FK
+    int year
+    int month
+    decimal gross_revenue
+    decimal net_revenue
+    decimal ebitda
+    decimal ytd_revenue
+    decimal tax_limit_pct
+    timestamptz calculated_at
+  }
 
-    COST_CENTER {
-        uuid id PK
-        uuid tenant_id FK
-        string name
-        string description
-        boolean is_active
-        timestamp created_at
-    }
+  tax_alerts {
+    uuid id PK
+    uuid company_id FK
+    string alert_type
+    decimal threshold_pct
+    string channel
+    string status
+    timestamptz sent_at
+  }
 
-    TRANSACTION {
-        uuid id PK
-        uuid tenant_id FK
-        uuid account_id FK
-        uuid category_id FK
-        uuid cost_center_id FK
-        uuid created_by FK
-        string type
-        decimal amount
-        string description
-        date due_date
-        date paid_date
-        string status
-        string recurrence_type
-        uuid recurrence_group_id
-        integer installment_number
-        integer installment_total
-        timestamp created_at
-        timestamp updated_at
-    }
+  audit_log {
+    uuid id PK
+    uuid user_id FK
+    string action
+    string entity
+    uuid entity_id
+    string ip_address
+    string user_agent
+    jsonb payload
+    timestamptz created_at
+  }
 
-    TRANSFER {
-        uuid id PK
-        uuid tenant_id FK
-        uuid origin_account_id FK
-        uuid destination_account_id FK
-        uuid transaction_out_id FK
-        uuid transaction_in_id FK
-        decimal amount
-        string description
-        date transfer_date
-        timestamp created_at
-    }
+  notification_settings {
+    uuid id PK
+    uuid user_id FK
+    boolean alert_70pct
+    boolean alert_85pct
+    boolean alert_95pct
+    boolean channel_whatsapp
+    boolean channel_platform
+    string whatsapp_number
+  }
 
-    ATTACHMENT {
-        uuid id PK
-        uuid transaction_id FK
-        string filename
-        string url
-        string mime_type
-        integer size_bytes
-        timestamp uploaded_at
-    }
-
-    USER ||--o{ TENANT_USER : "pertence a"
-    TENANT ||--o{ TENANT_USER : "possui"
-    TENANT ||--o{ ACCOUNT : "possui"
-    TENANT ||--o{ CATEGORY : "possui"
-    TENANT ||--o{ COST_CENTER : "possui"
-    TENANT ||--o{ TRANSACTION : "possui"
-    TENANT ||--o{ TRANSFER : "possui"
-    ACCOUNT ||--o{ TRANSACTION : "contém"
-    CATEGORY ||--o{ TRANSACTION : "classifica"
-    CATEGORY ||--o{ CATEGORY : "pai de"
-    COST_CENTER ||--o{ TRANSACTION : "agrupa"
-    USER ||--o{ TRANSACTION : "cria"
-    TRANSACTION ||--o{ ATTACHMENT : "anexa"
-    ACCOUNT ||--o{ TRANSFER : "origem"
-    ACCOUNT ||--o{ TRANSFER : "destino"
+  users ||--o{ companies : "possui"
+  users ||--o{ audit_log : "gera"
+  users ||--|| notification_settings : "configura"
+  companies ||--o{ bank_accounts : "conecta"
+  companies ||--o{ transactions : "registra"
+  companies ||--o{ monthly_snapshots : "acumula"
+  companies ||--o{ tax_alerts : "dispara"
 ```
 
 ---
 
-## Descrição das Entidades
+## Descrição das tabelas
 
-### USER
-Usuário da plataforma. Um usuário pode pertencer a múltiplos tenants (empresas).
-
-### TENANT
-Empresa/organização. Unidade de isolamento de dados (multi-tenancy).  
-`role` em TENANT_USER: `admin`, `financial`, `operational`.
-
-### ACCOUNT
-Conta bancária, carteira ou caixa de uma empresa.  
-`type`: `checking` | `savings` | `cash` | `investment`.
-
-### CATEGORY
-Plano de contas hierárquico.  
-`type`: `income` | `expense`.  
-Suporta categorias pai/filho (ex: "Despesas Operacionais" > "Aluguel").
-
-### COST_CENTER
-Centro de custo para agrupamento gerencial de transações.
-
-### TRANSACTION
-Lançamento financeiro (entrada ou saída).  
-- `type`: `income` | `expense`  
-- `status`: `pending` | `paid` | `cancelled`  
-- `recurrence_type`: `none` | `daily` | `weekly` | `monthly` | `yearly`  
-- Lançamentos parcelados compartilham o mesmo `recurrence_group_id`.
-
-### TRANSFER
-Transferência entre duas contas do mesmo tenant.  
-Gera dois registros em TRANSACTION (um débito e um crédito) vinculados por `transaction_out_id` e `transaction_in_id`.
-
-### ATTACHMENT
-Arquivo comprovante vinculado a uma transação (nota fiscal, recibo, etc.).
+| Tabela | Descrição |
+|---|---|
+| `users` | Usuários do sistema (donos de empresa e contadores) |
+| `companies` | Empresas cadastradas — uma por CNPJ, vinculada a um `owner_id` |
+| `bank_accounts` | Contas bancárias conectadas via Open Finance (Pluggy) |
+| `transactions` | Entradas e saídas financeiras — manuais ou importadas via Pluggy |
+| `monthly_snapshots` | Métricas mensais pré-calculadas (EBITDA, YTD, % do limite) |
+| `tax_alerts` | Histórico de alertas tributários enviados por empresa |
+| `audit_log` | Log de auditoria de todas as ações sensíveis do usuário |
+| `notification_settings` | Preferências de notificação por usuário (1:1 com users) |
 
 ---
 
-## Notas de Implementação
+## Notas de design
 
-- **Row-Level Security (RLS):** todas as tabelas com `tenant_id` devem ter políticas RLS habilitadas no PostgreSQL.
-- **Soft delete:** entidades críticas (ACCOUNT, CATEGORY, TRANSACTION) usam `is_active = false` em vez de DELETE físico.
-- **Auditoria:** considerar tabela `audit_log` para registrar mudanças em transações no futuro.
+- **`pluggy_tx_id`** em `transactions` tem constraint `UNIQUE` — garante idempotência na importação de extratos bancários.
+- **`bank_account_id`** em `transactions` é nullable — é `NULL` para transações inseridas manualmente, preenchido apenas para transações importadas via Pluggy.
+- **`monthly_snapshots`** armazena métricas pré-calculadas para evitar recálculo em tempo real no dashboard. Recalculado diariamente às 02h pelo `NightlySnapshotJob`.
+- **`active`** em `companies` e `bank_accounts` implementa soft delete — registros nunca são removidos fisicamente.
+- **`notification_settings`** é 1:1 com `users` — criada automaticamente no cadastro do usuário com valores padrão.
+- **`audit_log.payload`** é `jsonb` — armazena os dados relevantes da ação (ex: campos alterados, valores antes/depois).
