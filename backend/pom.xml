@@ -83,6 +83,12 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- ── WebClient (WebFlux) ──────────────────────────────────────────── -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+
         <!-- ── Redis ───────────────────────────────────────────────────────── -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
