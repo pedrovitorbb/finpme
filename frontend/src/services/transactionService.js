@@ -15,6 +15,14 @@ export async function createTransaction(companyId, data) {
   return responseData
 }
 
+export async function updateTransaction(companyId, id, data) {
+  const { data: responseData } = await api.patch(
+    `/api/v1/companies/${companyId}/transactions/${id}`,
+    data,
+  )
+  return responseData
+}
+
 export async function deleteTransaction(companyId, id) {
   const { data } = await api.delete(`/api/v1/companies/${companyId}/transactions/${id}`)
   return data

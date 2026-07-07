@@ -1,199 +1,167 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
-import { listCompanies } from '../services/companyService'
-import { getDashboard } from '../services/dashboardService'
-import { getTaxRadar } from '../services/taxRadarService'
-import { logout } from '../services/authService'
-import './DashboardPage.css'
+import { Link } from 'react-router-dom'
+import TopBar from '@/components/TopBar'
+import SemaforoCard from '@/components/SemaforoCard'
+import InsightCard from '@/components/InsightCard'
+import RadarBar from '@/components/RadarBar'
+import MoneyDisplay from '@/components/MoneyDisplay'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useCompany } from '@/context/CompanyContext'
+import { formatCurrency } from '@/hooks/useFormatters'
+import { getDashboard } from '@/services/dashboardService'
+import { getTaxRadar } from '@/services/taxRadarService'
+import { getLatestInsights } from '@/services/insightService'
+import { listTransactions } from '@/services/transactionService'
+import { getCurrentUser } from '@/services/authService'
 
-const ALERT_LABELS = {
-  null: 'Normal',
-  WARNING_70: 'Atenção (70%)',
-  WARNING_85: 'Alerta (85%)',
-  WARNING_95: 'Crítico (95%)',
+const REGIME_LABELS = {
+  MEI: 'Limite MEI',
+  SIMPLES_NACIONAL: 'Limite Simples',
 }
 
-const ALERT_COLORS = {
-  null: '#2e7d32',
-  WARNING_70: '#f9a825',
-  WARNING_85: '#ef6c00',
-  WARNING_95: '#c62828',
+function greeting() {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'Bom dia'
+  if (hour < 18) return 'Boa tarde'
+  return 'Boa noite'
 }
 
-const MONTH_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-
-function formatCurrency(value) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value ?? 0)
+function isoDate(date) {
+  return date.toISOString().slice(0, 10)
 }
 
-function formatCompact(value) {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
-  if (value >= 1000) return `${Math.round(value / 1000)}k`
-  return `${value}`
-}
-
-function getLastSixMonths(year, month) {
-  const months = []
-  for (let i = 5; i >= 0; i--) {
-    const date = new Date(year, month - 1 - i, 1)
-    months.push({ year: date.getFullYear(), month: date.getMonth() + 1 })
-  }
-  return months
+function sumWhere(transactions, predicate) {
+  return transactions.filter(predicate).reduce((total, t) => total + Number(t.amount), 0)
 }
 
 function DashboardPage() {
+  const { company } = useCompany()
+  const user = getCurrentUser()
   const [loading, setLoading] = useState(true)
-  const [companies, setCompanies] = useState([])
   const [dashboard, setDashboard] = useState(null)
-  const [taxRadar, setTaxRadar] = useState(null)
-  const [revenueHistory, setRevenueHistory] = useState([])
-  const navigate = useNavigate()
+  const [radar, setRadar] = useState(null)
+  const [insight, setInsight] = useState(null)
+  const [cash, setCash] = useState(0)
+  const [week, setWeek] = useState({ income: 0, expense: 0 })
 
   useEffect(() => {
     let cancelled = false
 
-    async function loadData() {
-      const companyList = await listCompanies()
-      if (cancelled) return
-      setCompanies(companyList)
-
-      if (companyList.length === 0) {
-        setLoading(false)
-        return
-      }
-
-      const companyId = companyList[0].id
+    async function load() {
       const now = new Date()
-      const year = now.getFullYear()
-      const month = now.getMonth() + 1
-      const months = getLastSixMonths(year, month)
+      const startOfYear = new Date(now.getFullYear(), 0, 1)
+      const weekAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6)
 
-      const [monthlyDashboards, taxRadarData] = await Promise.all([
-        Promise.all(
-          months.map((m) =>
-            getDashboard(companyId, m.year, m.month).catch(() => null),
-          ),
-        ),
-        getTaxRadar(companyId),
+      const [dashboardData, radarData, insights, yearTransactions] = await Promise.all([
+        getDashboard(company.id, now.getFullYear(), now.getMonth() + 1).catch(() => null),
+        getTaxRadar(company.id).catch(() => null),
+        getLatestInsights(company.id).catch(() => []),
+        listTransactions(company.id, {
+          startDate: isoDate(startOfYear),
+          endDate: isoDate(now),
+        }).catch(() => []),
       ])
       if (cancelled) return
 
-      setDashboard(monthlyDashboards[monthlyDashboards.length - 1])
-      setTaxRadar(taxRadarData)
-      setRevenueHistory(
-        months.map((m, index) => ({
-          month: MONTH_LABELS[m.month - 1],
-          grossRevenue: monthlyDashboards[index]?.grossRevenue ?? 0,
-        })),
+      setDashboard(dashboardData)
+      setRadar(radarData)
+      setInsight(insights[0] ?? null)
+      setCash(
+        sumWhere(yearTransactions, (t) => t.type === 'INCOME') -
+          sumWhere(yearTransactions, (t) => t.type === 'EXPENSE'),
       )
+
+      const weekStart = isoDate(weekAgo)
+      setWeek({
+        income: sumWhere(yearTransactions, (t) => t.type === 'INCOME' && t.transactionDate >= weekStart),
+        expense: sumWhere(yearTransactions, (t) => t.type === 'EXPENSE' && t.transactionDate >= weekStart),
+      })
       setLoading(false)
     }
 
-    loadData()
-
+    load()
     return () => {
       cancelled = true
     }
-  }, [])
-
-  function handleLogout() {
-    logout()
-  }
+  }, [company.id])
 
   if (loading) {
-    return <div className="dashboard-page dashboard-loading">Carregando...</div>
+    return (
+      <div className="flex flex-col gap-5 px-5 pt-5">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-6 w-24" />
+          <Skeleton className="h-9 w-9 rounded-full" />
+        </div>
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-12 w-56" />
+        <Skeleton className="h-20 w-full" />
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    )
   }
 
+  const firstName = user?.name?.split(' ')[0] ?? ''
+
   return (
-    <div className="dashboard-page">
-      <header className="dashboard-header">
-        <h1>Dashboard</h1>
-        <button type="button" className="logout-button" onClick={handleLogout}>
-          Sair
-        </button>
-      </header>
+    <div>
+      <TopBar />
 
-      {companies.length === 0 ? (
-        <div className="dashboard-empty">
-          <p>Nenhuma empresa cadastrada</p>
-          <button type="button" onClick={() => navigate('/companies')}>
-            Cadastrar empresa
-          </button>
+      <section className="px-5 pt-6">
+        <p className="text-sm text-text-secondary">
+          {greeting()}
+          {firstName ? `, ${firstName}` : ''}
+        </p>
+        <p className="mt-3">
+          <MoneyDisplay value={cash} size="display" tone={cash < 0 ? 'danger' : 'default'} />
+        </p>
+        <p className="mt-1 text-sm text-text-muted">no caixa do negócio agora</p>
+      </section>
+
+      <div className="mx-5 my-6 border-t" />
+
+      <section className="grid grid-cols-2 gap-4 px-5">
+        <div>
+          <p className="text-xs font-medium text-text-secondary">Entrou essa semana</p>
+          <p className="mt-1">
+            <MoneyDisplay value={week.income} size="lg" tone="success" signed />
+          </p>
         </div>
-      ) : (
-        <>
-          <section className="metrics-grid">
-            <div className="metric-card">
-              <span className="metric-label">Faturamento Bruto</span>
-              <span className="metric-value">{formatCurrency(dashboard?.grossRevenue)}</span>
-            </div>
-            <div className="metric-card">
-              <span className="metric-label">Faturamento Líquido</span>
-              <span className="metric-value">{formatCurrency(dashboard?.netRevenue)}</span>
-            </div>
-            <div className="metric-card">
-              <span className="metric-label">EBITDA</span>
-              <span className="metric-value">{formatCurrency(dashboard?.ebitda)}</span>
-            </div>
-            <div className="metric-card">
-              <span className="metric-label">Total de Despesas</span>
-              <span className="metric-value">{formatCurrency(dashboard?.totalExpenses)}</span>
-            </div>
-          </section>
+        <div>
+          <p className="text-xs font-medium text-text-secondary">Saiu essa semana</p>
+          <p className="mt-1">
+            <MoneyDisplay value={-week.expense} size="lg" tone="danger" signed={week.expense > 0} />
+          </p>
+        </div>
+      </section>
 
-          <section className="tax-radar">
-            <h2>Radar Tributário</h2>
-            <div className="tax-radar-content">
-              <div className="tax-radar-item">
-                <span className="metric-label">Limite Utilizado</span>
-                <span className="metric-value">{taxRadar?.limitUsedPct}%</span>
-              </div>
-              <div className="tax-radar-item">
-                <span className="metric-label">Faturamento Acumulado (ano)</span>
-                <span className="metric-value">{formatCurrency(taxRadar?.ytdRevenue)}</span>
-              </div>
-              <div className="tax-radar-item">
-                <span className="metric-label">Nível de Alerta</span>
-                <span
-                  className="alert-badge"
-                  style={{ backgroundColor: ALERT_COLORS[taxRadar?.alertLevel] ?? ALERT_COLORS.null }}
-                >
-                  {ALERT_LABELS[taxRadar?.alertLevel] ?? ALERT_LABELS.null}
-                </span>
-              </div>
-            </div>
-          </section>
+      <section className="mt-6 flex flex-col gap-4 px-5">
+        {dashboard?.healthMessage && (
+          <SemaforoCard level={dashboard.healthLevel} message={dashboard.healthMessage} />
+        )}
 
-          <section className="revenue-chart">
-            <h2>Evolução de Receita</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={revenueHistory}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="month" />
-                <YAxis tickFormatter={formatCompact} />
-                <Tooltip
-                  formatter={(value) => [formatCurrency(value), 'Faturamento Bruto']}
-                />
-                <Bar
-                  dataKey="grossRevenue"
-                  fill="#6b6bff"
-                  radius={[4, 4, 0, 0]}
-                  isAnimationActive={false}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </section>
-        </>
-      )}
+        {insight && <InsightCard title={insight.title} message={insight.message} />}
+
+        {radar?.annualLimit != null && (
+          <div className="rounded-lg border bg-surface p-4">
+            <RadarBar
+              label={REGIME_LABELS[radar.taxRegime] ?? 'Limite do regime'}
+              percent={radar.limitUsedPct}
+              caption={
+                radar.canStillEarn != null
+                  ? `Pode faturar mais ${formatCurrency(radar.canStillEarn)} este ano`
+                  : undefined
+              }
+            />
+            <Link
+              to="/impostos"
+              className="mt-3 inline-block text-sm font-medium text-primary"
+            >
+              Ver detalhes
+            </Link>
+          </div>
+        )}
+      </section>
     </div>
   )
 }
