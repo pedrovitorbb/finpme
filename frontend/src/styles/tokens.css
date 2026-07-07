@@ -1,0 +1,52 @@
+/* ──────────────────────────────────────────────────────────────
+   Design tokens do Fintrek — estilo minimalista
+   Paleta de referência (hex):
+     primary  #185FA5   success #639922
+     warning  #EF9F27   danger  #E24B4A
+     texto    #1E293B / #475569 / #94A3B8
+     surface  #FFFFFF   background #F8FAFC   border #E2E8F0
+   Os valores abaixo são os mesmos em HSL (formato exigido pelos
+   componentes shadcn/ui via hsl(var(--token))).
+   ────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Cores de marca e feedback */
+  --primary: 210 75% 37%;            /* #185FA5 */
+  --primary-foreground: 0 0% 100%;
+  --success: 87 64% 37%;             /* #639922 */
+  --success-foreground: 0 0% 100%;
+  --warning: 36 86% 55%;             /* #EF9F27 */
+  --warning-foreground: 24 45% 15%;
+  --danger: 0 72% 59%;               /* #E24B4A */
+  --danger-foreground: 0 0% 100%;
+
+  /* Texto */
+  --text-primary: 217 33% 17%;       /* #1E293B */
+  --text-secondary: 215 19% 35%;     /* #475569 */
+  --text-muted: 214 20% 65%;         /* #94A3B8 */
+
+  /* Superfícies */
+  --surface: 0 0% 100%;              /* #FFFFFF */
+  --background: 210 40% 98%;         /* #F8FAFC */
+  --border: 214 32% 91%;             /* #E2E8F0 */
+
+  /* Mapeamento shadcn/ui */
+  --foreground: var(--text-primary);
+  --card: var(--surface);
+  --card-foreground: var(--text-primary);
+  --popover: var(--surface);
+  --popover-foreground: var(--text-primary);
+  --secondary: 210 40% 96%;          /* slate-100 */
+  --secondary-foreground: var(--text-primary);
+  --muted: 210 40% 96%;
+  --muted-foreground: var(--text-secondary);
+  --accent: 210 40% 96%;
+  --accent-foreground: var(--text-primary);
+  --input: var(--border);
+  --ring: var(--primary);
+
+  /* Raio e espaçamento base */
+  --radius: 1rem;
+  --space-page: 1.25rem;             /* respiro lateral padrão das telas */
+  --bottom-nav-height: 4.25rem;
+}
