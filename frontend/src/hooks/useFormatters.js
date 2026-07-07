@@ -42,7 +42,8 @@ export function formatFriendlyDate(date) {
   if (diffDays <= 0) {
     if (diffDays === 0) return 'hoje'
     if (diffDays === -1) return 'amanhã'
-    return `em ${-diffDays} dias`
+    if (diffDays >= -30) return `em ${-diffDays} dias`
+    return `dia ${formatDate(target)}`
   }
   if (diffDays === 1) return 'ontem'
   if (diffDays < 7) return `há ${diffDays} dias`

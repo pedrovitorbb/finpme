@@ -5,7 +5,9 @@ const SIZES = {
   sm: 'text-sm font-medium',
   md: 'text-base font-medium',
   lg: 'text-2xl font-semibold',
-  display: 'text-display tracking-tight',
+  // tamanho arbitrário (não "text-display") para o tailwind-merge não
+  // confundir a classe custom com uma cor e descartá-la
+  display: 'text-[2.625rem] leading-[1.1] font-medium tracking-tight',
 }
 
 /**
