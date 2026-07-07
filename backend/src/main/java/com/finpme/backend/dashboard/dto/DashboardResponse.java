@@ -11,6 +11,9 @@ public record DashboardResponse(
         BigDecimal taxAmount,
         BigDecimal operationalCosts,
         BigDecimal totalExpenses,
-        long transactionCount
+        long transactionCount,
+        String healthLevel,
+        String healthMessage,
+        BigDecimal monthsOfReserve
 ) {
 }
