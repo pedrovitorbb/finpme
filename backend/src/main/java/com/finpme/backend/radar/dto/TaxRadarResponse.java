@@ -10,6 +10,9 @@ public record TaxRadarResponse(
         BigDecimal limitUsedPct,
         BigDecimal projectedRevenue,
         TaxRegime taxRegime,
-        String alertLevel
+        String alertLevel,
+        BigDecimal canStillEarn,
+        String projectionMessage,
+        String friendlyStatus
 ) {
 }
