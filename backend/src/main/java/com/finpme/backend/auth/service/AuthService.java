@@ -36,6 +36,7 @@ public class AuthService {
                 .passwordHash(passwordEncoder.encode(request.password()))
                 .plan(Plan.MEI_SOLO)
                 .active(true)
+                .mixesPersonalBusiness(Boolean.TRUE.equals(request.mixesPersonalBusiness()))
                 .createdAt(now)
                 .updatedAt(now)
                 .build();

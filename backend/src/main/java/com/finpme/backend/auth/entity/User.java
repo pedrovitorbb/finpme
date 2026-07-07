@@ -48,6 +48,9 @@ public class User implements UserDetails {
 
     private boolean active;
 
+    @Column(name = "mixes_personal_business")
+    private boolean mixesPersonalBusiness;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
