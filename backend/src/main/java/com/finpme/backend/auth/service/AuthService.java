@@ -13,6 +13,7 @@ import com.finpme.backend.auth.dto.RegisterRequest;
 import com.finpme.backend.auth.entity.Plan;
 import com.finpme.backend.auth.entity.User;
 import com.finpme.backend.auth.repository.UserRepository;
+import com.finpme.backend.notification.service.NotificationSettingsService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -23,6 +24,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
+    private final NotificationSettingsService notificationSettingsService;
 
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.email())) {
@@ -42,6 +44,7 @@ public class AuthService {
                 .build();
 
         userRepository.save(user);
+        notificationSettingsService.createDefaultForUser(user.getId());
 
         String token = jwtService.generateToken(user);
         return new AuthResponse(token, user.getEmail(), user.getName(), user.getPlan());
